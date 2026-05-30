@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>마찰력 &amp; 탐구과정 퀴즈</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a1a; font-family: "Noto Sans KR", sans-serif; }
+    input::placeholder { color: #999; }
+    input[type=range] { accent-color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef, useEffect, useCallback, forwardRef } = React;
+
+
+// ════════════════════════════════════════════════════════════════
+// ⚙️  Apps Script 웹앱 URL — 배포 후 여기에 붙여넣기
+// ════════════════════════════════════════════════════════════════
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyKSfGX5SBSC-ZVb4xFeOK1ni16zto58dYigOqk8_zJx5sjDl85teGqr2dgYTxin2ycUQ/exec";
+
+// ── API 헬퍼 ──────────────────────────────────────────────────────
+async function gasGet(params) {
+  const url = GAS_URL + "?" + new URLSearchParams(params).toString();
+  const res = await fetch(url);
+  return res.json();
+}
+async function gasPost(body) {
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+// ── Q2 데이터 ─────────────────────────────────────────────────────
+const Q2_ITEMS = [
+  { label:"2-1", chosung:"ㅁㅈㅇㅅ, ㄱㅅㅅㅈ", desc:"탐구의 첫 번째 단계", color:"#FF6B6B",
+    accepted:["문제인식및가설설정","문제인식가설설정"], display:"문제인식 및 가설설정" },
+  { label:"2-2", chosung:"ㅌㄱㅅㄱ, ㅌㄱㅅㅎ", desc:"계획하고 실행하는 단계", color:"#4ECDC4",
+    accepted:["탐구설계및탐구수행","탐구설계탐구수행"], display:"탐구설계 및 탐구수행" },
+  { label:"2-3", chosung:"ㅈㄹㅎㅅ", desc:"데이터를 분석하는 단계", color:"#45B7D1",
+    accepted:["자료해석"], display:"자료해석" },
+  { label:"2-4", chosung:"ㄱㄹㄷㅊ", desc:"최종 마무리 단계", color:"#96CEB4",
+    accepted:["결론도출"], display:"결론도출" },
+];
+function checkQ2Answer(item, input) {
+  const norm = s => s.replace(/\s/g,"").replace(/및/g,"");
+  return item.accepted.some(a => norm(a) === norm(input));
+}
+
+// ── Q3 데이터 ─────────────────────────────────────────────────────
+const Q3_QUESTIONS = [
+  { q:"실험에서 결과에 영향을 미칠 것으로 예상되어 의도적으로 변화시키는 변인은?",
+    accepted:["조작변인","조작"], display:"조작변인" },
+  { q:"실험 결과에 영향을 미치지 않도록 일정하게 유지시키는 변인은?",
+    accepted:["통제변인","통제"], display:"통제변인" },
+  { q:"조작변인에 의해 변하는, 측정·관찰되는 변인은?",
+    accepted:["종속변인","종속"], display:"종속변인" },
+];
+function checkQ3Answer(item, input) {
+  const norm = s => s.replace(/\s/g,"");
+  return item.accepted.some(a => norm(a) === norm(input));
+}
+
+// ── CanvasPanel ───────────────────────────────────────────────────
+const CanvasPanel = forwardRef(function CanvasPanel({ accentColor, bgColor, watermark }, ref) {
+  const canvasRef = useRef(null);
+  const [drawing,setDrawing]=useState(false);
+  const [color,setColor]=useState("#ffffff");
+  const [lineWidth,setLineWidth]=useState(3);
+  const [tool,setTool]=useState("pen");
+  const [textVal,setTextVal]=useState("");
+  const lastPos=useRef(null);
+  const COLORS=["#ffffff","#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#9b59b6","#1abc9c","#000000"];
+
+  const initCanvas=useCallback(()=>{
+    const c=canvasRef.current; if(!c) return;
+    const ctx=c.getContext("2d");
+    ctx.fillStyle=bgColor; ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle="rgba(255,255,255,0.04)"; ctx.lineWidth=1;
+    for(let y=40;y<c.height;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();}
+    ctx.font="bold 14px 'Noto Sans KR',sans-serif";
+    ctx.fillStyle="rgba(255,255,255,0.1)"; ctx.fillText(watermark,10,22);
+  },[bgColor,watermark]);
+
+  useEffect(()=>{initCanvas();},[initCanvas]);
+  useEffect(()=>{ if(ref) ref.current={toDataURL:()=>canvasRef.current?.toDataURL("image/png")??""} },[ref]);
+
+  const getPos=(e,c)=>{
+    const r=c.getBoundingClientRect();
+    const sx=c.width/r.width, sy=c.height/r.height;
+    const s=e.touches?e.touches[0]:e;
+    return {x:(s.clientX-r.left)*sx, y:(s.clientY-r.top)*sy};
+  };
+  const startDraw=useCallback((e)=>{
+    e.preventDefault(); if(tool==="text") return;
+    setDrawing(true);
+    const pos=getPos(e,canvasRef.current); lastPos.current=pos;
+    const ctx=canvasRef.current.getContext("2d");
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,(tool==="eraser"?12:lineWidth)/2,0,Math.PI*2);
+    ctx.fillStyle=tool==="eraser"?bgColor:color; ctx.fill();
+  },[tool,color,lineWidth,bgColor]);
+  const draw=useCallback((e)=>{
+    e.preventDefault(); if(!drawing) return;
+    const c=canvasRef.current; const ctx=c.getContext("2d");
+    const pos=getPos(e,c);
+    ctx.beginPath(); ctx.moveTo(lastPos.current.x,lastPos.current.y); ctx.lineTo(pos.x,pos.y);
+    ctx.strokeStyle=tool==="eraser"?bgColor:color;
+    ctx.lineWidth=tool==="eraser"?24:lineWidth; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.stroke();
+    lastPos.current=pos;
+  },[drawing,color,lineWidth,tool,bgColor]);
+  const endDraw=useCallback(()=>setDrawing(false),[]);
+  const addText=(e)=>{
+    if(tool!=="text"||!textVal.trim()) return;
+    const c=canvasRef.current; const ctx=c.getContext("2d");
+    const r=c.getBoundingClientRect();
+    ctx.font=`${lineWidth*5+10}px 'Noto Sans KR',sans-serif`; ctx.fillStyle=color;
+    ctx.fillText(textVal,(e.clientX-r.left)*(c.width/r.width),(e.clientY-r.top)*(c.height/r.height));
+  };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",
+        background:"rgba(255,255,255,0.04)",padding:"8px 10px",borderRadius:10,
+        border:`1px solid ${accentColor}33`}}>
+        <div style={{display:"flex",gap:4}}>
+          {[["pen","✏️ 펜"],["eraser","🧹 지우개"],["text","✍️ 텍스트"]].map(([t,label])=>(
+            <button key={t} onClick={()=>setTool(t)}
+              style={{padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",
+                fontFamily:"inherit",fontSize:12,
+                background:tool===t?accentColor:"rgba(255,255,255,0.08)",color:"#fff",transition:"all .15s"}}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:3}}>
+          {COLORS.map(c=>(
+            <div key={c} onClick={()=>{setColor(c);if(tool==="eraser")setTool("pen");}}
+              style={{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",
+                border:color===c?"2.5px solid #fff":"1.5px solid rgba(255,255,255,0.15)",transition:"all .15s"}}/>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <span style={{color:"#aaa",fontSize:11}}>굵기</span>
+          <input type="range" min={1} max={10} value={lineWidth}
+            onChange={e=>setLineWidth(+e.target.value)} style={{width:60}}/>
+        </div>
+        {tool==="text"&&(
+          <input value={textVal} onChange={e=>setTextVal(e.target.value)}
+            placeholder="텍스트 입력 후 캔버스 클릭"
+            style={{padding:"4px 8px",borderRadius:6,border:"1px solid rgba(255,255,255,0.15)",
+              background:"rgba(255,255,255,0.08)",color:"#fff",fontFamily:"inherit",fontSize:12,width:160}}/>
+        )}
+        <button onClick={initCanvas}
+          style={{padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",
+            background:"rgba(255,255,255,0.06)",color:"#ccc",fontFamily:"inherit",fontSize:12}}>
+          🗑️ 지우기
+        </button>
+      </div>
+      <canvas ref={canvasRef} width={640} height={420}
+        style={{width:"100%",borderRadius:10,touchAction:"none",
+          border:`1.5px solid ${accentColor}55`,cursor:tool==="text"?"text":"crosshair"}}
+        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} onClick={addText}/>
+    </div>
+  );
+});
+
+// ── DualCanvas ────────────────────────────────────────────────────
+function DualCanvas({ onSave }) {
+  const [activeSlope,setActiveSlope]=useState(true);
+  const slopeRef=useRef(null), flatRef=useRef(null);
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setActiveSlope(true)}
+          style={{flex:1,padding:"10px 0",borderRadius:10,border:"none",cursor:"pointer",
+            fontFamily:"inherit",fontSize:14,fontWeight:700,transition:"all .2s",
+            background:activeSlope?"linear-gradient(135deg,#e74c3c,#c0392b)":"rgba(255,255,255,0.06)",
+            color:"#fff",boxShadow:activeSlope?"0 4px 15px rgba(231,76,60,.35)":"none"}}>
+          🏔️ 경사면
+        </button>
+        <button onClick={()=>setActiveSlope(false)}
+          style={{flex:1,padding:"10px 0",borderRadius:10,border:"none",cursor:"pointer",
+            fontFamily:"inherit",fontSize:14,fontWeight:700,transition:"all .2s",
+            background:!activeSlope?"linear-gradient(135deg,#3498db,#2980b9)":"rgba(255,255,255,0.06)",
+            color:"#fff",boxShadow:!activeSlope?"0 4px 15px rgba(52,152,219,.35)":"none"}}>
+          🛣️ 평지
+        </button>
+      </div>
+      <div style={{display:activeSlope?"block":"none"}}>
+        <div style={{color:"#e74c3c",fontWeight:700,fontSize:13,marginBottom:6}}>🏔️ 경사면에서 미끄러지지 않을 조건</div>
+        <CanvasPanel ref={slopeRef} accentColor="#e74c3c" bgColor="#0d1117" watermark="경사면"/>
+      </div>
+      <div style={{display:!activeSlope?"block":"none"}}>
+        <div style={{color:"#3498db",fontWeight:700,fontSize:13,marginBottom:6}}>🛣️ 평지에서 미끄러지지 않을 조건</div>
+        <CanvasPanel ref={flatRef} accentColor="#3498db" bgColor="#0d1117" watermark="평지"/>
+      </div>
+      <button onClick={()=>onSave({slope:slopeRef.current?.toDataURL()??"",flat:flatRef.current?.toDataURL()??""})}
+        style={{padding:"13px 0",borderRadius:12,border:"none",cursor:"pointer",
+          background:"linear-gradient(135deg,#e74c3c,#c0392b)",color:"#fff",
+          fontFamily:"inherit",fontSize:15,fontWeight:700,boxShadow:"0 4px 20px rgba(231,76,60,.4)"}}>
+        📤 두 캔버스 모두 제출하기
+      </button>
+    </div>
+  );
+}
+
+// ── LeaderboardMini ───────────────────────────────────────────────
+function LeaderboardMini({ scores, myClass, myKey }) {
+  const classScores=scores.filter(s=>String(s.classNum)===String(myClass));
+  const ranked=[...classScores].sort((a,b)=>b.total-a.total||(a.ts||0)-(b.ts||0));
+  if(ranked.length===0) return null;
+  return (
+    <div style={{marginTop:16,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:16,
+      border:"1px solid rgba(255,255,255,0.07)"}}>
+      <div style={{color:"#aaa",fontSize:13,marginBottom:10}}>🏆 {myClass}반 현재 순위</div>
+      {ranked.slice(0,5).map((s,i)=>(
+        <div key={s.key} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",
+          borderBottom:"1px solid rgba(255,255,255,0.04)",
+          color:s.key===myKey?"#f1c40f":"#ccc",fontWeight:s.key===myKey?700:400}}>
+          <span>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}위`} {s.num}모둠 {s.name}{s.key===myKey?" (나)":""}</span>
+          <span>{s.total}점</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Q1CardList ────────────────────────────────────────────────────
+function Q1CardList({ subs, onDelete }) {
+  const [confirmKey,setConfirmKey]=useState(null);
+  const sorted=[...subs].sort((a,b)=>(a.classNum-b.classNum)||String(a.num).localeCompare(String(b.num)));
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {sorted.map((s,i)=>(
+        <div key={i} style={{background:"rgba(255,255,255,0.03)",borderRadius:14,
+          border:"1px solid rgba(255,255,255,0.08)",padding:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{color:"#e74c3c",fontWeight:700,fontSize:15}}>
+              {s.classNum}반 {s.num}모둠 {s.name}
+              <span style={{color:"#555",fontWeight:400,fontSize:12,marginLeft:10}}>
+                {new Date(s.ts).toLocaleTimeString()}
+              </span>
+            </div>
+            {confirmKey===s.key?(
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{color:"#f1c40f",fontSize:12}}>정말 삭제?</span>
+                <button onClick={()=>{onDelete(s.key);setConfirmKey(null);}}
+                  style={{padding:"4px 10px",borderRadius:6,border:"none",cursor:"pointer",
+                    background:"#e74c3c",color:"#fff",fontFamily:"inherit",fontSize:12,fontWeight:700}}>삭제</button>
+                <button onClick={()=>setConfirmKey(null)}
+                  style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.15)",
+                    cursor:"pointer",background:"rgba(255,255,255,0.06)",color:"#aaa",fontFamily:"inherit",fontSize:12}}>취소</button>
+              </div>
+            ):(
+              <button onClick={()=>setConfirmKey(s.key)}
+                style={{padding:"4px 12px",borderRadius:7,border:"1px solid rgba(231,76,60,0.35)",
+                  background:"rgba(231,76,60,0.1)",color:"#e74c3c",cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                🗑️ 삭제
+              </button>
+            )}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{color:"#e74c3c",fontSize:12,fontWeight:600,marginBottom:4}}>🏔️ 경사면</div>
+              {s.slope?<img src={s.slope} alt="경사면" style={{width:"100%",borderRadius:8,border:"1px solid rgba(231,76,60,.3)"}}/>
+                :<div style={{color:"#555",fontSize:12}}>미제출</div>}
+            </div>
+            <div>
+              <div style={{color:"#3498db",fontSize:12,fontWeight:600,marginBottom:4}}>🛣️ 평지</div>
+              {s.flat?<img src={s.flat} alt="평지" style={{width:"100%",borderRadius:8,border:"1px solid rgba(52,152,219,.3)"}}/>
+                :<div style={{color:"#555",fontSize:12}}>미제출</div>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── RankCardList ──────────────────────────────────────────────────
+function RankCardList({ ranked, onDelete }) {
+  const [confirmKey,setConfirmKey]=useState(null);
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {ranked.map(s=>(
+        <div key={s.key} style={{background:"rgba(255,255,255,0.03)",borderRadius:14,
+          border:"1px solid rgba(255,255,255,0.08)",padding:16,
+          display:"flex",alignItems:"center",gap:14}}>
+          <div style={{fontSize:26,width:46,textAlign:"center",flexShrink:0}}>
+            {s.rank===1?"🥇":s.rank===2?"🥈":s.rank===3?"🥉":`${s.rank}위`}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+<div style={{color:"#fff",fontWeight:700,fontSize:15}}>{s.classNum}반 {s.num}모둠 {s.name}</div>
+            <div style={{color:"#aaa",fontSize:13,marginTop:2}}>Q2: {s.q2s}점 · Q3: {s.q3s}점</div>
+          </div>
+          <div style={{fontSize:24,fontWeight:900,flexShrink:0,
+            color:s.rank===1?"#f1c40f":s.rank===2?"#bdc3c7":"#cd7f32"}}>{s.total}점</div>
+          {confirmKey===s.key?(
+            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              <span style={{color:"#f1c40f",fontSize:12}}>정말?</span>
+              <button onClick={()=>{onDelete(s.key);setConfirmKey(null);}}
+                style={{padding:"4px 10px",borderRadius:6,border:"none",cursor:"pointer",
+                  background:"#e74c3c",color:"#fff",fontFamily:"inherit",fontSize:12,fontWeight:700}}>삭제</button>
+              <button onClick={()=>setConfirmKey(null)}
+                style={{padding:"4px 8px",borderRadius:6,border:"1px solid rgba(255,255,255,0.15)",
+                  cursor:"pointer",background:"rgba(255,255,255,0.06)",color:"#aaa",fontFamily:"inherit",fontSize:12}}>취소</button>
+            </div>
+          ):(
+            <button onClick={()=>setConfirmKey(s.key)}
+              style={{padding:"5px 10px",borderRadius:7,border:"1px solid rgba(231,76,60,0.35)",
+                background:"rgba(231,76,60,0.1)",color:"#e74c3c",cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+              🗑️
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// MAIN APP
+// ════════════════════════════════════════════════════════════════
+function App() {
+  const [mode,setMode]=useState("home");
+  const [classNum,setClassNum]=useState(null);
+  const [groupNum,setGroupNum]=useState(null);  // 1~15
+  const [stuName1,setStuName1]=useState("");  // 이름1
+  const [stuName2,setStuName2]=useState("");  // 이름2
+  const [nameError,setNameError]=useState("");
+  const [checking,setChecking]=useState(false); // 중복체크 중
+  const [currentQ,setCurrentQ]=useState(1);
+
+  // Q1
+  const [q1Submitted,setQ1Submitted]=useState(false);
+  const [q1Images,setQ1Images]=useState(null);
+  const [q1Saving,setQ1Saving]=useState(false);
+
+  // Q2
+  const [q2Inputs,setQ2Inputs]=useState(["","","",""]);
+  const [q2Results,setQ2Results]=useState([null,null,null,null]);
+  const [q2Done,setQ2Done]=useState(false);
+  const [q2Score,setQ2Score]=useState(0);
+
+  // Q3
+  const [q3Inputs,setQ3Inputs]=useState(["","",""]);
+  const [q3Results,setQ3Results]=useState([null,null,null]);
+  const [q3Done,setQ3Done]=useState(false);
+  const [q3Score,setQ3Score]=useState(0);
+  const [q3Saving,setQ3Saving]=useState(false);
+
+  // Teacher
+  const [teacherPass,setTeacherPass]=useState("");
+  const [teacherAuth,setTeacherAuth]=useState(false);
+  const [savedPass,setSavedPass]=useState(()=>{
+    try{return localStorage.getItem("teacher_pass")||"8895";}catch{return "8895";}
+  });
+  const [showChangePw,setShowChangePw]=useState(false);
+  const [newPw1,setNewPw1]=useState(""); const [newPw2,setNewPw2]=useState("");
+  const [pwMsg,setPwMsg]=useState(""); const [loginError,setLoginError]=useState("");
+  const [dashTab,setDashTab]=useState("q1");
+  const [filterClass,setFilterClass]=useState("all");
+  const [allData,setAllData]=useState({submissions:[],scores:[]});
+  const [loading,setLoading]=useState(false);
+  const [refreshTick,setRefreshTick]=useState(0);
+  const [gasConfigured]=useState(()=>GAS_URL.startsWith("https://script.google.com"));
+
+  const stuName=`${stuName1}${stuName2?(' '+stuName2):''}`;
+  const studentKey=classNum?`${classNum}-${groupNum}-${stuName1}-${stuName2}`:"";
+
+  // ── GAS 미설정 시 localStorage fallback ──────────────────────────
+  const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||"[]");}catch{return [];}};
+  const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
+
+  // ── 데이터 로드 ──────────────────────────────────────────────────
+  const loadDashData=useCallback(async()=>{
+    setLoading(true);
+    if(gasConfigured){
+      try{
+        const r=await gasGet({action:"load"});
+        if(r.ok) setAllData({submissions:r.submissions, scores:r.scores});
+      }catch{}
+    } else {
+      setAllData({submissions:lsGet("friction_q1_v2"), scores:lsGet("friction_scores_v2")});
+    }
+    setLoading(false);
+  },[gasConfigured]);
+
+  // 자동 새로고침 (교사 대시보드 열려있을 때 30초마다)
+  useEffect(()=>{
+    if(mode==="teacher"&&teacherAuth){
+      loadDashData();
+      const id=setInterval(()=>loadDashData(), 30000);
+      return ()=>clearInterval(id);
+    }
+  },[mode,teacherAuth,refreshTick,loadDashData]);
+
+  // ── Q1 저장 ──────────────────────────────────────────────────────
+  const saveQ1=useCallback(async(imgs)=>{
+    setQ1Saving(true);
+    const rec={key:studentKey,classNum,num:groupNum,name:stuName,
+      slope:imgs.slope,flat:imgs.flat,ts:Date.now()};
+    if(gasConfigured){
+      try{ await gasPost({action:"saveQ1",...rec}); }catch{}
+    } else {
+      const prev=lsGet("friction_q1_v2");
+      const idx=prev.findIndex(r=>r.key===studentKey);
+      if(idx>=0) prev[idx]=rec; else prev.push(rec);
+      lsSet("friction_q1_v2",prev);
+    }
+    setQ1Images(imgs); setQ1Submitted(true); setQ1Saving(false);
+  },[studentKey,classNum,groupNum,stuName,gasConfigured]);
+
+  // ── Score 저장 ────────────────────────────────────────────────────
+  const saveScore=useCallback(async(q2s,q3s)=>{
+    setQ3Saving(true);
+    const rec={key:studentKey,classNum,num:groupNum,name:stuName,
+      q2s,q3s,total:q2s+q3s,ts:Date.now()};
+    if(gasConfigured){
+      try{ await gasPost({action:"saveScore",...rec}); }catch{}
+    } else {
+      const prev=lsGet("friction_scores_v2");
+      const idx=prev.findIndex(r=>r.key===studentKey);
+      if(idx>=0) prev[idx]=rec; else prev.push(rec);
+      lsSet("friction_scores_v2",prev);
+    }
+    setQ3Saving(false);
+  },[studentKey,classNum,groupNum,stuName,gasConfigured]);
+
+  // ── 삭제 ─────────────────────────────────────────────────────────
+  const deleteAll=useCallback(async(key)=>{
+    if(gasConfigured){
+      try{ await gasPost({action:"deleteAll",key}); }catch{}
+    } else {
+      lsSet("friction_q1_v2", lsGet("friction_q1_v2").filter(r=>r.key!==key));
+      lsSet("friction_scores_v2", lsGet("friction_scores_v2").filter(r=>r.key!==key));
+    }
+    setAllData(d=>({
+      submissions:d.submissions.filter(r=>r.key!==key),
+      scores:d.scores.filter(r=>r.key!==key),
+    }));
+  },[gasConfigured]);
+
+  // ── Q2/Q3 체크 ───────────────────────────────────────────────────
+  const checkQ2=()=>{
+    const results=Q2_ITEMS.map((item,i)=>checkQ2Answer(item,q2Inputs[i]));
+    setQ2Results(results); setQ2Score(results.filter(Boolean).length*25); setQ2Done(true);
+  };
+  const checkQ3=async()=>{
+    const results=Q3_QUESTIONS.map((item,i)=>checkQ3Answer(item,q3Inputs[i]));
+    const score=results.filter(Boolean).length*33;
+    setQ3Results(results); setQ3Score(score); setQ3Done(true);
+    await saveScore(q2Score, score);
+  };
+
+  // ── 교사 로그인/비번 ─────────────────────────────────────────────
+  const handleTeacherLogin=()=>{
+    if(teacherPass===savedPass){setTeacherAuth(true);setLoginError("");}
+    else setLoginError("비밀번호가 올바르지 않습니다.");
+  };
+  const handleChangePass=()=>{
+    if(!newPw1||newPw1.length<4){setPwMsg("4자리 이상 입력해주세요.");return;}
+    if(newPw1!==newPw2){setPwMsg("두 비밀번호가 일치하지 않습니다.");return;}
+    try{localStorage.setItem("teacher_pass",newPw1);}catch{}
+    setSavedPass(newPw1); setNewPw1(""); setNewPw2("");
+    setPwMsg("✅ 비밀번호가 변경되었습니다.");
+    setTimeout(()=>{setShowChangePw(false);setPwMsg("");},1500);
+  };
+
+  // ── 학생 시작 (중복 체크) ─────────────────────────────────────────
+  const handleStart=async()=>{
+    if(!classNum){setNameError("반을 선택해주세요.");return;}
+    if(!groupNum){setNameError("모둠을 선택해주세요.");return;}
+    if(!stuName1.trim()){setNameError("이름(1)을 입력해주세요.");return;}
+    setChecking(true); setNameError("");
+    try{
+      if(gasConfigured){
+        const r=await gasGet({action:"checkDup",classNum,num:groupNum});
+        if(r.ok&&r.dup){
+          setNameError(`${classNum}반 ${groupNum}모둠은 이미 제출되었습니다. 교사에게 문의하세요.`);
+          setChecking(false); return;
+        }
+      } else {
+        const scores=lsGet("friction_scores_v2");
+        const subs=lsGet("friction_q1_v2");
+        if(scores.find(r=>String(r.classNum)===String(classNum)&&String(r.num)===String(groupNum))
+          ||subs.find(r=>String(r.classNum)===String(classNum)&&String(r.num)===String(groupNum))){
+          setNameError(`${classNum}반 ${groupNum}모둠은 이미 제출되었습니다. 교사에게 문의하세요.`);
+          setChecking(false); return;
+        }
+      }
+    }catch{}
+    setChecking(false); setMode("student");
+  };
+
+  const getRanked=scores=>[...scores].sort((a,b)=>b.total-a.total||(a.ts||0)-(b.ts||0)).map((s,i)=>({...s,rank:i+1}));
+
+  // ═══════════════════ HOME ════════════════════════════════════════
+  if(mode==="home") return (
+    <div style={S.bg}>
+      <div style={S.homeCard}>
+        <div style={S.badge}>⚗️ 과학 탐구 퀴즈</div>
+        <h1 style={S.homeTitle}>마찰력 &amp; 탐구과정</h1>
+        <p style={S.homeSub}>중학교 1학년 · 실험 마무리 퀴즈</p>
+
+        {/* GAS 미설정 경고 */}
+        {!gasConfigured&&(
+          <div style={{marginTop:14,padding:"10px 14px",borderRadius:10,
+            background:"rgba(241,196,15,0.1)",border:"1px solid rgba(241,196,15,0.3)",
+            color:"#f1c40f",fontSize:13,lineHeight:1.6}}>
+            ⚠️ 아직 Google Sheets 연동 전입니다.<br/>
+            이 기기에만 데이터가 저장됩니다.
+          </div>
+        )}
+
+        <div style={{display:"flex",flexDirection:"column",gap:16,marginTop:20}}>
+          <div>
+            <div style={{color:"#aaa",fontSize:13,marginBottom:8}}>① 반 선택</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
+              {Array.from({length:11},(_,i)=>i+1).map(n=>(
+                <button key={n} onClick={()=>setClassNum(n)}
+                  style={{padding:"9px 0",borderRadius:9,border:"none",cursor:"pointer",
+                    fontFamily:"inherit",fontSize:14,fontWeight:700,transition:"all .15s",
+                    background:classNum===n?"linear-gradient(135deg,#e74c3c,#c0392b)":"rgba(255,255,255,0.07)",
+                    color:"#fff",boxShadow:classNum===n?"0 3px 12px rgba(231,76,60,.4)":"none"}}>
+                  {n}반
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{color:"#aaa",fontSize:13,marginBottom:8}}>② 모둠 선택</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+              {Array.from({length:15},(_,i)=>i+1).map(n=>(
+                <button key={n} onClick={()=>setGroupNum(n)}
+                  style={{padding:"9px 0",borderRadius:9,border:"none",cursor:"pointer",
+                    fontFamily:"inherit",fontSize:14,fontWeight:700,transition:"all .15s",
+                    background:groupNum===n?"linear-gradient(135deg,#9b59b6,#8e44ad)":"rgba(255,255,255,0.07)",
+                    color:"#fff",boxShadow:groupNum===n?"0 3px 12px rgba(155,89,182,.4)":"none"}}>
+                  {n}모둠
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{color:"#aaa",fontSize:13,marginBottom:6}}>③ 이름</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <input value={stuName1} onChange={e=>setStuName1(e.target.value)}
+                placeholder="이름 1" style={{...S.input,background:"#fff",color:"#111",borderColor:"rgba(0,0,0,0.2)"}}
+                onKeyDown={e=>{if(e.key==="Enter") handleStart();}}/>
+              <input value={stuName2} onChange={e=>setStuName2(e.target.value)}
+                placeholder="이름 2 (선택)" style={{...S.input,background:"#fff",color:"#111",borderColor:"rgba(0,0,0,0.2)"}}
+                onKeyDown={e=>{if(e.key==="Enter") handleStart();}}/>
+            </div>
+          </div>
+          {nameError&&(
+            <div style={{color:"#e74c3c",fontSize:13,background:"rgba(231,76,60,0.1)",
+              padding:"8px 12px",borderRadius:8,border:"1px solid rgba(231,76,60,0.25)"}}>
+              ⚠️ {nameError}
+            </div>
+          )}
+          <button onClick={handleStart} disabled={checking}
+            style={{...S.btn,opacity:checking?0.6:1}}>
+            {checking?"⏳ 확인 중...":"🎯 퀴즈 시작하기"}
+          </button>
+          <button onClick={()=>setMode("teacher")}
+            style={{...S.btn,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)"}}>
+            🖥️ 교사 대시보드
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ═══════════════════ TEACHER AUTH ════════════════════════════════
+  if(mode==="teacher"&&!teacherAuth) return (
+    <div style={S.bg}>
+      <div style={S.homeCard}>
+        <div style={S.badge}>🔐 교사 인증</div>
+        <h2 style={{color:"#fff",marginBottom:20}}>비밀번호 입력</h2>
+        <input type="password" value={teacherPass}
+          onChange={e=>{setTeacherPass(e.target.value);setLoginError("");}}
+          placeholder="비밀번호 입력"
+          style={{...S.input,background:"#fff",color:"#111",borderColor:"rgba(0,0,0,0.2)"}}
+          onKeyDown={e=>{if(e.key==="Enter") handleTeacherLogin();}}/>
+        {loginError&&(
+          <div style={{color:"#e74c3c",fontSize:13,marginTop:8,padding:"7px 12px",
+            background:"rgba(231,76,60,0.1)",borderRadius:8,border:"1px solid rgba(231,76,60,0.25)"}}>
+            ⚠️ {loginError}
+          </div>
+        )}
+        <button onClick={handleTeacherLogin} style={{...S.btn,marginTop:12}}>로그인</button>
+        <button onClick={()=>setMode("home")} style={{...S.btnGhost,marginTop:8}}>← 뒤로</button>
+      </div>
+    </div>
+  );
+
+  // ═══════════════════ TEACHER DASHBOARD ═══════════════════════════
+  if(mode==="teacher"&&teacherAuth){
+    const classOptions=["all",...Array.from({length:11},(_,i)=>String(i+1))];
+    const filteredSubs=filterClass==="all"?allData.submissions:allData.submissions.filter(s=>String(s.classNum)===filterClass);
+    const filteredScores=filterClass==="all"?allData.scores:allData.scores.filter(s=>String(s.classNum)===filterClass);
+    const ranked=getRanked(filteredScores);
+    return (
+      <div style={S.bg}>
+        <div style={{maxWidth:980,margin:"0 auto",padding:"24px 16px"}}>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div>
+              <div style={S.badge}>🖥️ 교사 대시보드</div>
+              <h1 style={{color:"#fff",margin:"4px 0 0",fontSize:22}}>마찰력 &amp; 탐구과정</h1>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+              <button onClick={()=>setRefreshTick(t=>t+1)}
+                style={{...S.btnSmall,display:"flex",alignItems:"center",gap:4}}>
+                {loading?"⏳":"🔄"} 새로고침
+              </button>
+              <button onClick={()=>{setShowChangePw(v=>!v);setPwMsg("");setNewPw1("");setNewPw2("");}}
+                style={{...S.btnSmall,background:"rgba(255,255,255,0.07)",color:"#ccc"}}>🔑 비번변경</button>
+              <button onClick={()=>{setMode("home");setTeacherAuth(false);}}
+                style={{...S.btnSmall,background:"rgba(255,255,255,0.05)",color:"#aaa"}}>나가기</button>
+            </div>
+          </div>
+
+          {/* GAS 상태 */}
+          {!gasConfigured&&(
+            <div style={{padding:"10px 14px",borderRadius:10,marginBottom:16,
+              background:"rgba(241,196,15,0.1)",border:"1px solid rgba(241,196,15,0.3)",
+              color:"#f1c40f",fontSize:13}}>
+              ⚠️ Google Sheets 미연동 상태 — 이 기기 데이터만 표시됩니다.
+            </div>
+          )}
+          {gasConfigured&&(
+            <div style={{padding:"8px 14px",borderRadius:10,marginBottom:16,
+              background:"rgba(46,204,113,0.08)",border:"1px solid rgba(46,204,113,0.25)",
+              color:"#2ecc71",fontSize:13}}>
+              ✅ Google Sheets 연동됨 · 30초마다 자동 새로고침
+            </div>
+          )}
+
+          {/* 비번 변경 패널 */}
+          {showChangePw&&(
+            <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,
+              border:"1px solid rgba(255,255,255,0.1)",padding:20,marginBottom:20}}>
+              <div style={{color:"#fff",fontWeight:700,marginBottom:14}}>🔑 비밀번호 변경</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <div>
+                  <div style={{color:"#aaa",fontSize:12,marginBottom:4}}>새 비밀번호</div>
+                  <input type="password" value={newPw1} onChange={e=>setNewPw1(e.target.value)}
+                    placeholder="새 비밀번호 (4자 이상)"
+                    style={{...S.input,background:"#fff",color:"#111",borderColor:"rgba(0,0,0,0.2)"}}/>
+                </div>
+                <div>
+                  <div style={{color:"#aaa",fontSize:12,marginBottom:4}}>비밀번호 확인</div>
+                  <input type="password" value={newPw2} onChange={e=>setNewPw2(e.target.value)}
+                    placeholder="동일하게 다시 입력"
+                    style={{...S.input,background:"#fff",color:"#111",borderColor:"rgba(0,0,0,0.2)"}}
+                    onKeyDown={e=>{if(e.key==="Enter") handleChangePass();}}/>
+                </div>
+              </div>
+              {pwMsg&&(
+                <div style={{fontSize:13,marginBottom:10,padding:"7px 12px",borderRadius:8,
+                  color:pwMsg.startsWith("✅")?"#2ecc71":"#e74c3c",
+                  background:pwMsg.startsWith("✅")?"rgba(46,204,113,0.1)":"rgba(231,76,60,0.1)",
+                  border:`1px solid ${pwMsg.startsWith("✅")?"rgba(46,204,113,0.3)":"rgba(231,76,60,0.25)"}`}}>
+                  {pwMsg}
+                </div>
+              )}
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={handleChangePass}
+                  style={{...S.btnSmall,background:"linear-gradient(135deg,#e74c3c,#c0392b)",color:"#fff",padding:"8px 20px"}}>
+                  변경하기
+                </button>
+                <button onClick={()=>{setShowChangePw(false);setPwMsg("");}}
+                  style={{...S.btnSmall,background:"rgba(255,255,255,0.05)",color:"#aaa",padding:"8px 20px"}}>
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 반 필터 */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            {classOptions.map(c=>(
+              <button key={c} onClick={()=>setFilterClass(c)}
+                style={{padding:"6px 14px",borderRadius:8,border:"none",cursor:"pointer",
+                  fontFamily:"inherit",fontSize:13,transition:"all .15s",
+                  background:filterClass===c?"#e74c3c":"rgba(255,255,255,0.07)",color:"#fff"}}>
+                {c==="all"?"전체":c+"반"}
+              </button>
+            ))}
+          </div>
+
+          {/* Tabs */}
+          <div style={{display:"flex",gap:8,marginBottom:20}}>
+            {[["q1","📝 Q1 답안"],["q2q3","🏆 점수 & 순위"]].map(([k,label])=>(
+              <button key={k} onClick={()=>setDashTab(k)}
+                style={{padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
+                  fontFamily:"inherit",fontSize:14,
+                  background:dashTab===k?"#e74c3c":"rgba(255,255,255,0.08)",color:"#fff"}}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {loading&&<div style={{color:"#aaa",textAlign:"center",padding:20}}>⏳ 불러오는 중...</div>}
+
+          {!loading&&dashTab==="q1"&&(
+            <div>
+              <h3 style={{color:"#e74c3c",marginBottom:16}}>Q1 답안 ({filteredSubs.length}명 제출)</h3>
+              {filteredSubs.length===0
+                ?<div style={S.emptyBox}>아직 제출된 답안이 없습니다</div>
+                :<Q1CardList subs={filteredSubs} onDelete={deleteAll}/>}
+            </div>
+          )}
+          {!loading&&dashTab==="q2q3"&&(
+            <div>
+              <h3 style={{color:"#4ECDC4",marginBottom:16}}>
+                🏆 {filterClass==="all"?"전체":filterClass+"반"} 순위 ({ranked.length}명)
+              </h3>
+              {ranked.length===0
+                ?<div style={S.emptyBox}>아직 제출된 점수가 없습니다</div>
+                :<RankCardList ranked={ranked} onDelete={deleteAll}/>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════ STUDENT QUIZ ════════════════════════════════
+  const progress=((currentQ-1)/3)*100;
+  return (
+    <div style={S.bg}>
+      <div style={{maxWidth:760,margin:"0 auto",padding:"20px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div>
+            <div style={S.badge}>⚗️ 마찰력 &amp; 탐구과정</div>
+            <div style={{color:"#888",fontSize:13,marginTop:3}}>👤 {classNum}반 {groupNum}모둠 {stuName}</div>
+          </div>
+          <div style={{color:"#e74c3c",fontWeight:700}}>{currentQ} / 3</div>
+        </div>
+        <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:3,marginBottom:22}}>
+          <div style={{height:"100%",width:`${progress}%`,
+            background:"linear-gradient(90deg,#e74c3c,#f39c12)",
+            borderRadius:3,transition:"width .5s"}}/>
+        </div>
+
+        {/* Q1 */}
+        {currentQ===1&&(
+          <div style={S.qCard}>
+            <div style={S.qNum}>Q1</div>
+            <h2 style={S.qTitle}>마찰력 — 미끄러지지 않을 조건을 그림과 글로 나타내세요</h2>
+            <p style={{color:"#888",fontSize:13,marginBottom:16,lineHeight:1.6}}>
+              경사면 / 평지 버튼을 눌러 각 캔버스에 자유롭게 그리거나 텍스트를 입력하세요.
+            </p>
+            {!q1Submitted
+              ?<DualCanvas onSave={async imgs=>{await saveQ1(imgs);}}/>
+              :(
+                <div>
+                  {q1Saving?<div style={{color:"#aaa",marginBottom:12}}>⏳ 저장 중...</div>
+                    :<div style={{color:"#2ecc71",fontWeight:700,fontSize:15,marginBottom:14}}>✅ 제출 완료!</div>}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+                    <div>
+                      <div style={{color:"#e74c3c",fontSize:13,fontWeight:600,marginBottom:5}}>🏔️ 경사면</div>
+                      <img src={q1Images.slope} alt="경사면" style={{width:"100%",borderRadius:8}}/>
+                    </div>
+                    <div>
+                      <div style={{color:"#3498db",fontSize:13,fontWeight:600,marginBottom:5}}>🛣️ 평지</div>
+                      <img src={q1Images.flat} alt="평지" style={{width:"100%",borderRadius:8}}/>
+                    </div>
+                  </div>
+                  <button onClick={()=>setCurrentQ(2)} style={S.btn}>다음 문제 →</button>
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Q2 */}
+        {currentQ===2&&(
+          <div style={S.qCard}>
+            <div style={S.qNum}>Q2</div>
+            <h2 style={S.qTitle}>탐구 과정 4단계 — 초성 퀴즈</h2>
+            <p style={{color:"#888",fontSize:13,marginBottom:18}}>초성을 보고 각 단계의 이름을 써보세요. (띄어쓰기·'및' 생략 가능)</p>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {Q2_ITEMS.map((item,i)=>(
+                <div key={i} style={{...S.infoBox,borderLeft:`3px solid ${item.color}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{color:item.color,fontWeight:700,fontSize:14}}>{item.label}</span>
+                    <span style={{color:"#666",fontSize:12}}>{item.desc}</span>
+                  </div>
+                  <div style={{fontSize:20,letterSpacing:6,color:"#fff",fontFamily:"monospace",
+                    marginBottom:10,background:"rgba(255,255,255,0.04)",padding:"8px 12px",borderRadius:8}}>
+                    {item.chosung}
+                  </div>
+                  <input value={q2Inputs[i]}
+                    onChange={e=>{const v=[...q2Inputs];v[i]=e.target.value;setQ2Inputs(v);}}
+                    disabled={q2Done} placeholder="정답 입력"
+                    style={{...S.input,margin:0,
+                      background:q2Done?(q2Results[i]?"#d4edda":"#f8d7da"):"#ffffff",
+                      color:"#111111",borderColor:q2Done?(q2Results[i]?"#2ecc71":"#e74c3c"):"rgba(0,0,0,0.25)"}}/>
+                  {q2Done&&(
+                    <div style={{marginTop:6,fontSize:13,color:q2Results[i]?"#2ecc71":"#e74c3c"}}>
+                      {q2Results[i]?"✅ 정답!":`❌ 정답: ${item.display}`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {!q2Done
+              ?<button onClick={checkQ2} style={{...S.btn,marginTop:20}}>✅ 제출하기</button>
+              :(
+                <div style={{marginTop:20}}>
+                  <div style={{...S.scoreBox,borderColor:"#4ECDC4"}}>
+                    <div style={{color:"#4ECDC4",fontSize:36,fontWeight:900}}>{q2Score}점</div>
+                    <div style={{color:"#aaa",fontSize:14,marginTop:4}}>
+                      {q2Score===100?"🎉 만점!":q2Score===0?"다시 확인해보세요":`${q2Score/25}개 정답`}
+                    </div>
+                  </div>
+                  <button onClick={()=>setCurrentQ(3)} style={{...S.btn,marginTop:14}}>다음 문제 →</button>
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Q3 */}
+        {currentQ===3&&(
+          <div style={S.qCard}>
+            <div style={S.qNum}>Q3</div>
+            <h2 style={S.qTitle}>변인의 종류 — 단답형</h2>
+            <p style={{color:"#888",fontSize:13,marginBottom:18}}>각 설명에 해당하는 변인의 이름을 쓰세요.</p>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {Q3_QUESTIONS.map((item,i)=>(
+                <div key={i} style={S.infoBox}>
+                  <div style={{color:"#f1c40f",fontWeight:700,fontSize:14,marginBottom:8}}>문제 {i+1}</div>
+                  <p style={{color:"#ddd",fontSize:14,lineHeight:1.7,marginBottom:10}}>{item.q}</p>
+                  <input value={q3Inputs[i]}
+                    onChange={e=>{const v=[...q3Inputs];v[i]=e.target.value;setQ3Inputs(v);}}
+                    disabled={q3Done} placeholder="정답 입력"
+                    style={{...S.input,margin:0,
+                      background:q3Done?(q3Results[i]?"#d4edda":"#f8d7da"):"#ffffff",
+                      color:"#111111",borderColor:q3Done?(q3Results[i]?"#2ecc71":"#e74c3c"):"rgba(0,0,0,0.25)"}}/>
+                  {q3Done&&(
+                    <div style={{marginTop:6,fontSize:13,color:q3Results[i]?"#2ecc71":"#e74c3c"}}>
+                      {q3Results[i]?"✅ 정답!":`❌ 정답: ${item.display}`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {!q3Done
+              ?<button onClick={checkQ3} disabled={q3Saving}
+                  style={{...S.btn,marginTop:20,opacity:q3Saving?0.6:1}}>
+                  {q3Saving?"⏳ 저장 중...":"✅ 제출하기"}
+                </button>
+              :(
+                <div style={{marginTop:20}}>
+                  <div style={{...S.scoreBox,borderColor:"#f1c40f"}}>
+                    <div style={{color:"#f1c40f",fontSize:36,fontWeight:900}}>{q3Score}점</div>
+                    <div style={{color:"#aaa",fontSize:14,marginTop:4}}>
+                      {q3Score>=99?"🎉 만점!":q3Score===0?"다시 확인해보세요":`${Math.round(q3Score/33)}개 정답`}
+                    </div>
+                  </div>
+                  <div style={{...S.scoreBox,borderColor:"#9b59b6",marginTop:12}}>
+                    <div style={{color:"#9b59b6",fontSize:13,marginBottom:4}}>📊 Q2 + Q3 합산</div>
+                    <div style={{color:"#fff",fontSize:30,fontWeight:900}}>{q2Score+q3Score}점</div>
+                  </div>
+                  <LeaderboardMini
+                    scores={allData.scores.length>0?allData.scores:lsGet("friction_scores_v2")}
+                    myClass={classNum} myKey={studentKey}/>
+                  <button onClick={()=>setMode("home")}
+                    style={{...S.btn,marginTop:14,background:"rgba(255,255,255,0.07)",
+                      border:"1px solid rgba(255,255,255,0.12)"}}>
+                    🏠 처음으로
+                  </button>
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────
+const S={
+  bg:{minHeight:"100vh",background:"linear-gradient(135deg,#0a0a1a 0%,#12082a 50%,#0a1520 100%)",
+    fontFamily:"'Noto Sans KR',sans-serif",padding:8},
+  homeCard:{maxWidth:440,margin:"40px auto 0",padding:32,
+    background:"rgba(255,255,255,0.03)",borderRadius:20,border:"1px solid rgba(255,255,255,0.08)"},
+  badge:{display:"inline-block",padding:"4px 12px",borderRadius:20,
+    background:"rgba(231,76,60,0.15)",border:"1px solid rgba(231,76,60,0.3)",
+    color:"#e74c3c",fontSize:13,fontWeight:600,marginBottom:12},
+  homeTitle:{color:"#fff",fontSize:26,margin:"0 0 4px",letterSpacing:-1},
+  homeSub:{color:"#888",fontSize:14,margin:0},
+  input:{width:"100%",padding:"10px 14px",borderRadius:10,
+    border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",
+    color:"#fff",fontFamily:"'Noto Sans KR',sans-serif",fontSize:14,
+    outline:"none",boxSizing:"border-box"},
+  btn:{width:"100%",padding:"12px 0",borderRadius:12,border:"none",cursor:"pointer",
+    background:"linear-gradient(135deg,#e74c3c,#c0392b)",color:"#fff",
+    fontFamily:"'Noto Sans KR',sans-serif",fontSize:15,fontWeight:700},
+  btnGhost:{width:"100%",padding:"10px 0",borderRadius:12,
+    border:"1px solid rgba(255,255,255,0.12)",cursor:"pointer",
+    background:"transparent",color:"#888",fontFamily:"'Noto Sans KR',sans-serif",fontSize:14},
+  btnSmall:{padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",
+    background:"rgba(231,76,60,0.15)",color:"#e74c3c",
+    fontFamily:"'Noto Sans KR',sans-serif",fontSize:13},
+  qCard:{background:"rgba(255,255,255,0.03)",borderRadius:20,
+    border:"1px solid rgba(255,255,255,0.08)",padding:24},
+  qNum:{display:"inline-block",padding:"3px 12px",borderRadius:6,
+    background:"rgba(231,76,60,0.2)",color:"#e74c3c",
+    fontSize:13,fontWeight:800,marginBottom:8,letterSpacing:1},
+  qTitle:{color:"#fff",fontSize:18,margin:"0 0 8px",lineHeight:1.4},
+  infoBox:{background:"rgba(255,255,255,0.03)",borderRadius:10,
+    border:"1px solid rgba(255,255,255,0.08)",padding:"12px 14px"},
+  scoreBox:{textAlign:"center",padding:20,borderRadius:14,
+    border:"2px solid",background:"rgba(255,255,255,0.02)"},
+  emptyBox:{textAlign:"center",padding:40,color:"#555",
+    background:"rgba(255,255,255,0.02)",borderRadius:12,
+    border:"1px dashed rgba(255,255,255,0.07)"},
+};
+
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
