@@ -44,17 +44,21 @@ async function gasPost(body) {
 // ── Q2 데이터 ─────────────────────────────────────────────────────
 const Q2_ITEMS = [
   { label:"2-1", chosung:"ㅁㅈㅇㅅ, ㄱㅅㅅㅈ", desc:"탐구의 첫 번째 단계", color:"#FF6B6B",
-    accepted:["문제인식및가설설정","문제인식가설설정"], display:"문제인식 및 가설설정" },
+    // 핵심 키워드: 문제인식 + 가설설정 둘 다 포함하면 정답
+    keywords:["문제인식","가설설정"], display:"문제인식 및 가설설정" },
   { label:"2-2", chosung:"ㅌㄱㅅㄱ, ㅌㄱㅅㅎ", desc:"계획하고 실행하는 단계", color:"#4ECDC4",
-    accepted:["탐구설계및탐구수행","탐구설계탐구수행"], display:"탐구설계 및 탐구수행" },
+    // 핵심 키워드: 탐구설계 + 탐구수행 둘 다 포함하면 정답
+    keywords:["탐구설계","탐구수행"], display:"탐구설계 및 탐구수행" },
   { label:"2-3", chosung:"ㅈㄹㅎㅅ", desc:"데이터를 분석하는 단계", color:"#45B7D1",
-    accepted:["자료해석"], display:"자료해석" },
+    keywords:["자료해석"], display:"자료해석" },
   { label:"2-4", chosung:"ㄱㄹㄷㅊ", desc:"최종 마무리 단계", color:"#96CEB4",
-    accepted:["결론도출"], display:"결론도출" },
+    keywords:["결론도출"], display:"결론도출" },
 ];
 function checkQ2Answer(item, input) {
-  const norm = s => s.replace(/\s/g,"").replace(/및/g,"");
-  return item.accepted.some(a => norm(a) === norm(input));
+  // 공백·쉼표·및·그리고 모두 제거 후 핵심 키워드 전부 포함하는지 확인
+  const norm = s => s.replace(/[\s,、및그리고]/g,"");
+  const normInput = norm(input);
+  return item.keywords.every(k => normInput.includes(norm(k)));
 }
 
 // ── Q3 데이터 ─────────────────────────────────────────────────────
