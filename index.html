@@ -26,6 +26,14 @@
 // ════════════════════════════════════════════════════════════════
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyKSfGX5SBSC-ZVb4xFeOK1ni16zto58dYigOqk8_zJx5sjDl85teGqr2dgYTxin2ycUQ/exec";
 
+// ── SHA-256 해시 (비밀번호 보안) ─────────────────────────────────────
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+// 기본 비밀번호 8895의 해시값 (코드에 평문 비번 없음)
+const DEFAULT_PASS_HASH = "62a7722a6980745a3ef86f0c7a14a0216b674dcb49ef898bed75777f61addd94";
+
 // ── API 헬퍼 ──────────────────────────────────────────────────────
 async function gasGet(params) {
   const url = GAS_URL + "?" + new URLSearchParams(params).toString();
@@ -386,7 +394,7 @@ function App() {
   const [teacherPass,setTeacherPass]=useState("");
   const [teacherAuth,setTeacherAuth]=useState(false);
   const [savedPass,setSavedPass]=useState(()=>{
-    try{return localStorage.getItem("teacher_pass")||"8895";}catch{return "8895";}
+    try{return localStorage.getItem("teacher_pass_hash")||DEFAULT_PASS_HASH;}catch{return DEFAULT_PASS_HASH;}
   });
   const [showChangePw,setShowChangePw]=useState(false);
   const [newPw1,setNewPw1]=useState(""); const [newPw2,setNewPw2]=useState("");
@@ -487,15 +495,17 @@ function App() {
   };
 
   // ── 교사 로그인/비번 ─────────────────────────────────────────────
-  const handleTeacherLogin=()=>{
-    if(teacherPass===savedPass){setTeacherAuth(true);setLoginError("");}
+  const handleTeacherLogin=async()=>{
+    const hash=await sha256(teacherPass);
+    if(hash===savedPass){setTeacherAuth(true);setLoginError("");}
     else setLoginError("비밀번호가 올바르지 않습니다.");
   };
-  const handleChangePass=()=>{
+  const handleChangePass=async()=>{
     if(!newPw1||newPw1.length<4){setPwMsg("4자리 이상 입력해주세요.");return;}
     if(newPw1!==newPw2){setPwMsg("두 비밀번호가 일치하지 않습니다.");return;}
-    try{localStorage.setItem("teacher_pass",newPw1);}catch{}
-    setSavedPass(newPw1); setNewPw1(""); setNewPw2("");
+    const hash=await sha256(newPw1);
+    try{localStorage.setItem("teacher_pass_hash",hash);}catch{}
+    setSavedPass(hash); setNewPw1(""); setNewPw2("");
     setPwMsg("✅ 비밀번호가 변경되었습니다.");
     setTimeout(()=>{setShowChangePw(false);setPwMsg("");},1500);
   };
