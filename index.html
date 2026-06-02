@@ -309,7 +309,7 @@ function RankCardList({ ranked, onDelete }) {
         <div key={s.key} style={{background:"rgba(255,255,255,0.03)",borderRadius:14,
           border:"1px solid rgba(255,255,255,0.08)",padding:16,
           display:"flex",alignItems:"center",gap:14}}>
-          <div style={{fontSize:26,width:46,textAlign:"center",flexShrink:0}}>
+          <div style={{fontSize:s.rank<=3?26:16,width:46,textAlign:"center",flexShrink:0,color:"#ffffff",fontWeight:900}}>
             {s.rank===1?"🥇":s.rank===2?"🥈":s.rank===3?"🥉":`${s.rank}위`}
           </div>
           <div style={{flex:1,minWidth:0}}>
