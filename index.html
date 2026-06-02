@@ -249,12 +249,20 @@ function Q1CardList({ subs, onDelete }) {
       {sorted.map((s,i)=>(
         <div key={i} style={{background:"rgba(255,255,255,0.03)",borderRadius:14,
           border:"1px solid rgba(255,255,255,0.08)",padding:16}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{color:"#e74c3c",fontWeight:700,fontSize:15}}>
-              {s.classNum}반 {s.num}모둠 {s.name}
-              <span style={{color:"#555",fontWeight:400,fontSize:12,marginLeft:10}}>
-                {new Date(s.ts).toLocaleTimeString()}
-              </span>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                <span style={{background:"rgba(231,76,60,0.2)",border:"1px solid rgba(231,76,60,0.45)",
+                  color:"#e74c3c",fontWeight:900,fontSize:14,padding:"3px 11px",borderRadius:20}}>
+                  {s.classNum}반
+                </span>
+                <span style={{background:"rgba(155,89,182,0.2)",border:"1px solid rgba(155,89,182,0.45)",
+                  color:"#c39bd3",fontWeight:900,fontSize:14,padding:"3px 11px",borderRadius:20}}>
+                  {s.num}모둠
+                </span>
+                <span style={{color:"#fff",fontWeight:700,fontSize:15}}>{s.name}</span>
+              </div>
+              <span style={{color:"#555",fontSize:11}}>제출: {new Date(s.ts).toLocaleTimeString()}</span>
             </div>
             {confirmKey===s.key?(
               <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -305,7 +313,17 @@ function RankCardList({ ranked, onDelete }) {
             {s.rank===1?"🥇":s.rank===2?"🥈":s.rank===3?"🥉":`${s.rank}위`}
           </div>
           <div style={{flex:1,minWidth:0}}>
-<div style={{color:"#fff",fontWeight:700,fontSize:15}}>{s.classNum}반 {s.num}모둠 {s.name}</div>
+<div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+              <span style={{background:"rgba(231,76,60,0.2)",border:"1px solid rgba(231,76,60,0.45)",
+                color:"#e74c3c",fontWeight:900,fontSize:13,padding:"2px 9px",borderRadius:16}}>
+                {s.classNum}반
+              </span>
+              <span style={{background:"rgba(155,89,182,0.2)",border:"1px solid rgba(155,89,182,0.45)",
+                color:"#c39bd3",fontWeight:900,fontSize:13,padding:"2px 9px",borderRadius:16}}>
+                {s.num}모둠
+              </span>
+              <span style={{color:"#fff",fontWeight:700,fontSize:15}}>{s.name}</span>
+            </div>
             <div style={{color:"#aaa",fontSize:13,marginTop:2}}>Q2: {s.q2s}점 · Q3: {s.q3s}점</div>
           </div>
           <div style={{fontSize:24,fontWeight:900,flexShrink:0,
