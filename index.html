@@ -427,12 +427,10 @@ function App() {
     setLoading(false);
   },[gasConfigured]);
 
-  // 자동 새로고침 (교사 대시보드 열려있을 때 30초마다)
+  // 수동 새로고침 (🔄 버튼 누를 때만)
   useEffect(()=>{
     if(mode==="teacher"&&teacherAuth){
       loadDashData();
-      const id=setInterval(()=>loadDashData(), 30000);
-      return ()=>clearInterval(id);
     }
   },[mode,teacherAuth,refreshTick,loadDashData]);
 
@@ -677,7 +675,7 @@ function App() {
             <div style={{padding:"8px 14px",borderRadius:10,marginBottom:16,
               background:"rgba(46,204,113,0.08)",border:"1px solid rgba(46,204,113,0.25)",
               color:"#2ecc71",fontSize:13}}>
-              ✅ Google Sheets 연동됨 · 30초마다 자동 새로고침
+              ✅ Google Sheets 연동됨 · 🔄 버튼으로 새로고침
             </div>
           )}
 
