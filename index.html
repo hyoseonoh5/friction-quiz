@@ -451,13 +451,18 @@ function App() {
   },[studentKey,classNum,groupNum,stuName,gasConfigured]);
 
   // ── Score 저장 ────────────────────────────────────────────────────
-  const saveScore=useCallback(async(q2s,q3s)=>{
+  const saveScore=useCallback(async(q2inputs,q3inputs,q2s,q3s)=>{
     setQ3Saving(true);
-    const rec={key:studentKey,classNum,num:groupNum,name:stuName,
-      q2s,q3s,total:q2s+q3s,ts:Date.now()};
     if(gasConfigured){
-      try{ await gasPost({action:"saveScore",...rec}); }catch{}
+      try{
+        const r=await gasPost({action:"saveScore",
+          key:studentKey,classNum,num:groupNum,name:stuName,
+          q2inputs,q3inputs,ts:Date.now()});
+        if(r.ok){ setQ2Score(r.q2s); setQ3Score(r.q3s); }
+      }catch{}
     } else {
+      const rec={key:studentKey,classNum,num:groupNum,name:stuName,
+        q2s,q3s,total:q2s+q3s,ts:Date.now()};
       const prev=lsGet("friction_scores_v2");
       const idx=prev.findIndex(r=>r.key===studentKey);
       if(idx>=0) prev[idx]=rec; else prev.push(rec);
@@ -487,9 +492,11 @@ function App() {
   };
   const checkQ3=async()=>{
     const results=Q3_QUESTIONS.map((item,i)=>checkQ3Answer(item,q3Inputs[i]));
-    const score=results.filter(Boolean).length*33;
+    const correct=results.filter(Boolean).length;
+    const score=correct===3?99:correct*33;
     setQ3Results(results); setQ3Score(score); setQ3Done(true);
-    await saveScore(q2Score, score);
+    // 답안 원문을 서버로 전송 → 서버에서 점수 재계산
+    await saveScore(q2Inputs, q3Inputs, q2Score, score);
   };
 
   // ── 교사 로그인/비번 ─────────────────────────────────────────────
